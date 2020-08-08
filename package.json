@@ -1,0 +1,20 @@
+{
+  "name": "simple-promise",
+  "version": "0.0.1",
+  "description": "Simple Promise Implementation",
+  "type": "module",
+  "main": "simplePromise.js",
+  "scripts": {
+    "test": "npx mocha .\\test\\simplePromise.js"
+  },
+  "keywords": [
+    "Promise",
+    "JavaScript"
+  ],
+  "author": "Bernardo Jungstedt Custodio Nunes; Luiz Paulo Oliveira Lyra de Miranda",
+  "license": "ISC",
+  "dependencies": {
+    "chai": "^4.2.0",
+    "mocha": "^8.1.1"
+  }
+}
