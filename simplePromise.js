@@ -13,19 +13,19 @@ export default function SimplePromise (task) {
         this.state = PROMISE_STATE.RESOLVED;
         this.value = value;
 
-        // run callbacks asynchronously
-        setTimeout(runCallbacks, 0);
+        runCallbacksAsync();
     };
 
     this.reject = err => {
+        this.state = PROMISE_STATE.REJECTED;
+        this.value = err;
         console.log(err);
-        // run callbacks asynchronously
-        setTimeout(runCallbacks, 0);
+        runCallbacksAsync();
     }
 
-    const runCallbacks = () => {
+    const runCallbacksAsync = () => setTimeout(() => {
         this.callbackQueue = this.callbackQueue.reduce((_, cb) => cb(this.value), []);
-    }
+    }, 0);
 
     try {
         // Run task synchronously
