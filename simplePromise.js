@@ -9,37 +9,44 @@ export default function SimplePromise (task) {
     this.value = null;
     this.callbackQueue = [];
 
-    this.resolve = value => {
-        this.state = PROMISE_STATE.RESOLVED;
+    const fulfill = state => value => {
+        if (this.state !== PROMISE_STATE.PENDING) {
+            // CANNOT ALTER STATE AFTER FULFILLMENT
+            return;
+        }
+
+        // if thennable, call then() function in order to chain other promises
+        if (value && value.then && typeof value.then === 'function') {
+            return value.then(this.resolve);
+        }
+
+        this.state = state;
         this.value = value;
-
-        runCallbacksAsync();
-    };
-
-    this.reject = err => {
-        this.state = PROMISE_STATE.REJECTED;
-        this.value = err;
-        console.log(err);
         runCallbacksAsync();
     }
 
     const runCallbacksAsync = () => setTimeout(() => {
+        // run all callbacks for this promise asynchronously
         this.callbackQueue = this.callbackQueue.reduce((_, cb) => cb(this.value), []);
     }, 0);
 
+    this.resolve = fulfill(PROMISE_STATE.RESOLVED).bind(this);
+    this.reject = fulfill(PROMISE_STATE.REJECTED).bind(this);
+
     try {
-        // Run task synchronously
-        task(this.resolve.bind(this), this.reject.bind(this));
+        // run task synchronously
+        task(this.resolve, this.reject);
     } catch(err) {
         this.reject(err);
     }
 
     /**
-     * Returns a promise that will resolve with the callback function
+     * Returns a new promise that will handle provided callbacks
      */
     this.then = function(callback) {
         return new SimplePromise((resolve, reject) => {
             this.callbackQueue.push(function(value) {
+                // fulfill the new promise with the result given by the callback
                 try {
                     resolve(callback(value));
                 } catch(err) {
