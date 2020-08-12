@@ -1,15 +1,17 @@
 const PROMISE_STATE = {
-    PENDING: 0,
-    RESOLVED: 1,
-    REJECTED: 2
+    PENDING: 'pending',
+    RESOLVED: 'resolved',
+    REJECTED: 'rejected'
 }
 
 export default function SimplePromise (task) {
+    if (!task || typeof task !== 'function') throw new Error('SimplePromise must receive a task');
+    
     this.state = PROMISE_STATE.PENDING;
     this.value = null;
     this.callbackQueue = [];
 
-    const fulfill = state => value => {
+    const setState = state => value => {
         if (this.state !== PROMISE_STATE.PENDING) {
             // CANNOT ALTER STATE AFTER FULFILLMENT
             return;
@@ -17,7 +19,7 @@ export default function SimplePromise (task) {
 
         // if thennable, call then() function in order to chain other promises
         if (value && value.then && typeof value.then === 'function') {
-            return value.then(this.resolve);
+            return value.then(this.resolve.bind(this), this.reject.bind(this));
         }
 
         this.state = state;
@@ -25,34 +27,59 @@ export default function SimplePromise (task) {
         runCallbacksAsync();
     }
 
-    const runCallbacksAsync = () => setTimeout(() => {
-        // run all callbacks for this promise asynchronously
-        this.callbackQueue = this.callbackQueue.reduce((_, cb) => cb(this.value), []);
-    }, 0);
-
-    this.resolve = fulfill(PROMISE_STATE.RESOLVED).bind(this);
-    this.reject = fulfill(PROMISE_STATE.REJECTED).bind(this);
+    // run all callbacks for this promise asynchronously
+    const runCallbacksAsync = () => this.callbackQueue.forEach(({ onResolve, onReject }) => {
+        setTimeout(() => {
+            if (this.state === PROMISE_STATE.RESOLVED) {
+                return onResolve(this.value);
+            }
+            if (this.state === PROMISE_STATE.REJECTED) {
+                return onReject(this.value);
+            }
+        }, 0);
+    });
+    
+    this.resolve = setState(PROMISE_STATE.RESOLVED);
+    this.reject = setState(PROMISE_STATE.REJECTED);
 
     try {
         // run task synchronously
-        task(this.resolve, this.reject);
+        task(this.resolve.bind(this), this.reject.bind(this));
     } catch(err) {
         this.reject(err);
     }
-
+    
     /**
      * Returns a new promise that will handle provided callbacks
      */
-    this.then = function(callback) {
+    this.then = function(resolveCallback, rejectCallback) {
+        const that = this;
         return new SimplePromise((resolve, reject) => {
-            this.callbackQueue.push(function(value) {
-                // fulfill the new promise with the result given by the callback
+            const onResolve = value => setTimeout(() => {
                 try {
-                    resolve(callback(value));
+                    if (!resolveCallback) return resolve(value);
+                    resolve(resolveCallback(value));
                 } catch(err) {
                     reject(err);
                 }
-            });
+            }, 0);
+            const onReject = value => setTimeout(() => {
+                try {
+                    if (!rejectCallback) return reject(value);
+                    resolve(rejectCallback(value));
+                } catch(otherError) {
+                    reject(otherError);
+                }
+            }, 0);
+
+            // call handlers directly if previous promise is already fulfilled
+            if (that.state === PROMISE_STATE.RESOLVED) return onResolve(that.value);
+            if (that.state === PROMISE_STATE.REJECTED) return onReject(that.value);
+            that.callbackQueue.push({ onResolve, onReject });
         });
     }
+
+    this.catch = rejectCallback => this.then(noop, rejectCallback);
 };
+
+function noop(value) { return value; }
